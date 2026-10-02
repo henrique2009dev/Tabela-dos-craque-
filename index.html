@@ -75,7 +75,7 @@ td select{flex:none;width:100%;min-width:96px;padding:6px 2px;font-size:14px}
 <div class="wrap" id="app"></div>
 <input type="file" id="file" accept=".json" class="hide">
 <script>
-const VERSION='1.3.0';
+const VERSION='1.4.0';
 const DB_URL='https://tabela-dos-default-rtdb.firebaseio.com';        // Ex.: 'https://SEU-PROJETO-default-rtdb.firebaseio.com' (necessário para tabela ao vivo)
 const APP_URL='https://tabela-dos-craques.vercel.app/';       // Site onde o app está hospedado (ex.: https://tabela-dos.web.app). Vazio = link craques://entrar
 const RN={leitor:'Leitor',editor:'Editor',admin:'Administrador'},RK={leitor:0,editor:1,admin:2};
@@ -84,7 +84,7 @@ let S={tables:[]},tab='t',cur=null,view='home',poll=null,photoNames=true,bar=tru
 try{S=JSON.parse(localStorage.getItem('craques')||'{"tables":[]}')}catch(e){}
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const rid=()=>Math.random().toString(36).slice(2,8).toUpperCase();
-function fix(T){S.cfg=S.cfg||{};if(!Array.isArray(T.hist)){T.hist=[];if(T.u){T.u.id=T.u.id||rid();T.u.t=T.u.t||0;T.hist.push(T.u)}}T.role=T.role||(T.live?'leitor':'admin');T.teams=T.teams||[];T.players=T.players||[];T.teams.forEach(t=>{t.k=t.k||rid();t.h=t.h||[]});T.players.forEach(p=>{p.id=p.id||rid();if(!Array.isArray(p.tks))p.tks=p.tk?[p.tk]:[];delete p.tk;p.gc=p.gc||0})}
+function fix(T){S.cfg=S.cfg||{};if(!Array.isArray(T.hist)){T.hist=[];if(T.u){T.u.id=T.u.id||rid();T.u.t=T.u.t||0;T.hist.push(T.u)}}T.role=T.role||(T.live?'leitor':'admin');T.teams=T.teams||[];T.players=T.players||[];T.teams.forEach(t=>{t.k=t.k||rid();t.h=t.h||[]});T.players.forEach(p=>{p.id=p.id||rid();if(!Array.isArray(p.tks))p.tks=p.tk?[p.tk]:[];delete p.tk;p.gc=p.gc||0;p.w=p.w||0;p.l=p.l||0})}
 S.tables=S.tables||[];S.cfg=S.cfg||{};S.tables.forEach(fix);
 function persist(){const j=JSON.stringify(S);localStorage.setItem('craques',j);localStorage.setItem('craques_bk',JSON.stringify({d:Date.now(),j}))}
 function save(){const w=cur&&cur.role!=='leitor'&&DB_URL;if(w)cur.t=Date.now();persist();if(w)push(cur)}
@@ -102,9 +102,26 @@ function cf(k,v,r){S.cfg[k]=v;persist();applyCfg();r&&render()}
 function preset(n){Object.assign(S.cfg,PRE[n]);persist();render()}
 function resetCfg(){ask('<h3>Restaurar visual padrão?</h3>',[['Restaurar',()=>{S.cfg={};persist();render()}],['Cancelar',()=>{}]])}
 function pickImg(cb,sz){const f=document.createElement('input');f.type='file';f.accept='image/*';f.onchange=()=>{const x=f.files[0];if(!x)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const m=Math.min(1,sz/Math.max(im.width,im.height)),c=document.createElement('canvas');c.width=Math.round(im.width*m);c.height=Math.round(im.height*m);c.getContext('2d').drawImage(im,0,0,c.width,c.height);cb(c.toDataURL('image/png'))};im.src=r.result};r.readAsDataURL(x)};f.click()}
-function crest(i){pickImg(d=>{cur.teams[i].img=d;save();render()},120)}
+function rmBg(src){return new Promise(ok=>{const im=new Image();im.onload=()=>{
+const w=im.width,h=im.height,c=document.createElement('canvas');c.width=w;c.height=h;
+const g=c.getContext('2d',{willReadFrequently:true});g.drawImage(im,0,0);
+const I=g.getImageData(0,0,w,h),d=I.data,N=w*h,B=[];
+for(let i=0;i<w;i++)B.push(i,(h-1)*w+i);for(let j=1;j<h-1;j++)B.push(j*w,j*w+w-1);
+const fin=()=>{let x0=w,y0=h,x1=-1,y1=-1;for(let y=0;y<h;y++)for(let x=0;x<w;x++)if(d[(y*w+x)*4+3]>12){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}
+ if(x1<0)return ok(src);g.putImageData(I,0,0);const cw=x1-x0+1,ch=y1-y0+1,o=document.createElement('canvas');o.width=cw;o.height=ch;o.getContext('2d').drawImage(c,x0,y0,cw,ch,0,0,cw,ch);ok(o.toDataURL('image/png'))};
+if(B.filter(i=>d[i*4+3]<200).length>B.length/2)return fin();
+const med=k=>{const a=B.map(i=>d[i*4+k]).sort((p,q)=>p-q);return a[a.length>>1]},R=med(0),G=med(1),Bl=med(2);
+const ds=i=>{const p=i*4,r=d[p]-R,gg=d[p+1]-G,b=d[p+2]-Bl;return Math.sqrt(r*r+gg*gg+b*b)},T=46;
+if(B.filter(i=>ds(i)<T).length<B.length*.6){toast('Fundo muito complexo: mantive a foto original');return ok(src)}
+const rm=new Uint8Array(N),st=[];B.forEach(i=>{if(ds(i)<T&&!rm[i]){rm[i]=1;st.push(i)}});
+while(st.length){const i=st.pop(),X=i%w,Y=(i/w)|0;[[X-1,Y],[X+1,Y],[X,Y-1],[X,Y+1]].forEach(([a,b])=>{if(a<0||b<0||a>=w||b>=h)return;const j=b*w+a;if(!rm[j]&&ds(j)<T){rm[j]=1;st.push(j)}})}
+for(let i=0;i<N;i++){const X=i%w,Y=(i/w)|0;if(rm[i]){d[i*4+3]=0;continue}
+ if((X&&rm[i-1])||(X<w-1&&rm[i+1])||(Y&&rm[i-w])||(Y<h-1&&rm[i+w])){const t=ds(i);if(t<T*1.8)d[i*4+3]=Math.round(255*Math.max(0,(t-T)/(T*.8)))}}
+fin()};im.src=src})}
+function crest(i,keep){pickImg(d=>{(keep?Promise.resolve(d):rmBg(d)).then(r=>{cur.teams[i].img=r;save();render()})},160)}
 function crestDel(i){delete cur.teams[i].img;save();render()}
-function crestMenu(i){const t=cur.teams[i];ask(`<h3>Escudo de ${esc(t.n)}</h3>`,[['Escolher da galeria',()=>crest(i)],...(t.img?[['Remover foto',()=>crestDel(i)]]:[]),['Cancelar',()=>{}]])}
+function crestMenu(i){const t=cur.teams[i];ask(`<h3>Escudo de ${esc(t.n)}</h3>`,[['Escolher foto (tira o fundo)',()=>crest(i)],['Escolher sem tirar o fundo',()=>crest(i,1)],...(t.img?[['Tirar fundo do atual',()=>rmBg(t.img).then(r=>{t.img=r;save();render()})],['Remover foto',()=>crestDel(i)]]:[])
+,['Cancelar',()=>{}]])}
 function rm(k,i){const x=cur[k][i];ask(`<h3>Excluir ${k==='teams'?'time':'jogador'}?</h3><p>${esc(x.n)}</p>`,[['Excluir',()=>{cur[k].splice(i,1);if(k==='teams'){cur.players.forEach(p=>p.tks=p.tks.filter(t=>t!==x.k));if(cur.u&&(cur.u.a===x.k||cur.u.b===x.k))delete cur.u}save();render()}],['Cancelar',()=>{}]])}
 function pickT(i){const p=cur.players[i];ask(`<h3>Times de ${esc(p.n)}</h3><p style="font-size:14px;opacity:.8">Marque um ou mais times.</p>`+cur.teams.map(t=>`<label class="chk"><input type="checkbox" value="${t.k}"${p.tks.includes(t.k)?' checked':''}><span>${esc(t.n)}</span></label>`).join(''),[['Salvar',()=>{p.tks=[...$('#mbox').querySelectorAll('input:checked')].map(x=>x.value);save();render()}],['Cancelar',()=>{}]])}
 function appearance(){const C=cfg(),col=(k,l)=>`<label class="pr"><span>${l}</span><input type="color" value="${C[k]}" oninput="cf('${k}',this.value)"></label>`;
@@ -116,7 +133,7 @@ function newTable(){ask('<h3>Nome da tabela</h3><input id="nt" value="Meu campeo
 function mk(n){
  const T={id:rid(),name:n,auto:true,owner:true,role:'admin',teams:[],players:[]};
  for(let i=1;i<=4;i++)T.teams.push({k:rid(),n:'Coloque o nome do time aqui',v:0,e:0,d:0,gp:0,gc:0,h:[]});
- for(let i=1;i<=4;i++)T.players.push({id:rid(),tks:[],n:'Coloque o nome do jogador aqui',j:0,g:0,h:0});
+ for(let i=1;i<=4;i++)T.players.push({id:rid(),tks:[],n:'Coloque o nome do jogador aqui',j:0,g:0,h:0,w:0,l:0});
  S.tables.push(T);cur=T;save();go('edit')}
 function go(v){view=v;clearInterval(poll);try{if((v==='edit'||v==='live')&&cur)localStorage.setItem('craques_last',cur.id+'|'+v);else if(v==='home'||v==='settings'||v==='join')localStorage.removeItem('craques_last')}catch(e){}render();window.scrollTo(0,0)}
 function mine(){return S.tables.length?'<h3 style="margin:0">Suas tabelas</h3>'+S.tables.map(t=>`<button class="big" onclick="open_('${t.id}')">${esc(t.name)}<small>${t.live?'Recebida · '+RN[t.role]:'Sua tabela'}</small></button>`).join(''):''}
@@ -147,13 +164,13 @@ function og(el,q){const g=(D.o=D.o||{})[q]=Math.max(0,+el.value||0);if(g){delete
 function reg(){const a=$('#sa').value,b=$('#sb').value,ga=+$('#ga').value||0,gb=+$('#gb').value||0;if(a===b)return toast('Escolha dois times diferentes');
  const A=cur.teams.find(t=>t.k===a),B=cur.teams.find(t=>t.k===b);if(!A||!B)return;
  let sa=0,sb=0;const m={};
- [[a,1],[b,2]].forEach(([k,s])=>cur.players.filter(p=>p.tks.includes(k)).forEach(p=>{const q=p.id+'|'+k,g=D.g[q]||0,o=(D.o||{})[q]||0;s===1?(sa+=g,sb+=o):(sb+=g,sa+=o);if(g||o||!D.x[q]){const e=m[p.id]=m[p.id]||{p,g:0,o:0};e.g+=g;e.o+=o}}));
- const ps=Object.values(m).map(e=>[e.p,e.g,e.o]);
+ [[a,1],[b,2]].forEach(([k,s])=>cur.players.filter(p=>p.tks.includes(k)).forEach(p=>{const q=p.id+'|'+k,g=D.g[q]||0,o=(D.o||{})[q]||0;s===1?(sa+=g,sb+=o):(sb+=g,sa+=o);if(g||o||!D.x[q]){const e=m[p.id]=m[p.id]||{p,g:0,o:0,w:0,l:0},dd=s===1?ga-gb:gb-ga;e.g+=g;e.o+=o;if(dd>0)e.w++;else if(dd<0)e.l++}}));
+ const ps=Object.values(m).map(e=>[e.p,e.g,e.o,e.w,e.l]);
  if(sa>ga||sb>gb)return toast('Os gols dos jogadores passam do placar do time');
  const r=ga>gb?['v','d','V','D']:ga<gb?['d','v','D','V']:['e','e','E','E'];
  A.gp+=ga;A.gc+=gb;B.gp+=gb;B.gc+=ga;A[r[0]]++;B[r[1]]++;(A.h=A.h||[]).push(r[2]);(B.h=B.h||[]).push(r[3]);
  const u={a,b,ga,gb,r:[r[0],r[1]],s:`${A.n} ${ga} x ${gb} ${B.n}`,p:[]};
- ps.forEach(([p,g,o])=>{const h=g>=3?1:0;p.g+=g;p.gc=(p.gc||0)+o;p.j++;p.h+=h;u.p.push([p.id,g,h,o])});
+ ps.forEach(([p,g,o,w,l])=>{const h=g>=3?1:0;p.g+=g;p.gc=(p.gc||0)+o;p.j++;p.h+=h;p.w=(p.w||0)+w;p.l=(p.l||0)+l;u.p.push([p.id,g,h,o,w,l])});
  u.id=rid();u.t=Date.now();(cur.hist=cur.hist||[]).push(u);cur.u=u;D.ga=D.gb=0;D.g={};D.x={};D.o={};save();notify('Jogo registrado',u.s);render()}
 function undo(){const u=cur.u;if(u)delGame(u.id)}
 function delGame(id){const H=cur.hist||[],ix=H.findIndex(x=>x.id===id);if(ix<0)return;const u=H[ix];
@@ -161,22 +178,22 @@ function delGame(id){const H=cur.hist||[],ix=H.findIndex(x=>x.id===id);if(ix<0)r
   const A=cur.teams.find(t=>t.k===u.a),B=cur.teams.find(t=>t.k===u.b),later=k=>H.slice(ix+1).filter(x=>x.a===k||x.b===k).length;
   const fx=(t,gp,gc,r,k)=>{if(!t)return;t.gp-=gp;t.gc-=gc;t[r]--;const h=t.h||[],p=h.length-1-later(k);if(p>=0&&h[p]===r.toUpperCase())h.splice(p,1)};
   fx(A,u.ga,u.gb,u.r[0],u.a);fx(B,u.gb,u.ga,u.r[1],u.b);
-  (u.p||[]).forEach(([pid,g,hh,o])=>{const p=cur.players.find(q=>q.id===pid);if(p){p.g-=g;p.gc=(p.gc||0)-(o||0);p.j--;p.h-=hh}});
+  (u.p||[]).forEach(([pid,g,hh,o,w,l])=>{const p=cur.players.find(q=>q.id===pid);if(p){p.g-=g;p.gc=(p.gc||0)-(o||0);p.w=(p.w||0)-(w||0);p.l=(p.l||0)-(l||0);p.j--;p.h-=hh}});
   H.splice(ix,1);if(H.length)cur.u=H[H.length-1];else delete cur.u;save();toast('Partida removida');render()}],['Cancelar',()=>{}]])}
 function histView(T,ro){const H=(T.hist||[]).slice().reverse();
  return '<h3>Registro de partidas</h3>'+(H.length?H.map(u=>{const A=T.teams.find(t=>t.k===u.a),B=T.teams.find(t=>t.k===u.b),d=u.t?new Date(u.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
   return `<div class="card pr"><div style="flex:1;min-width:0"><b>${esc(A?A.n:'?')} ${u.ga} x ${u.gb} ${esc(B?B.n:'?')}</b><div style="font-size:12px;opacity:.7">${d}</div></div>${ro?'':`<button class="sm trash" title="Remover partida" onclick="delGame('${u.id}')">🗑</button>`}</div>`}).join(''):'<p style="opacity:.7">Nenhuma partida registrada ainda.</p>')+'<p style="font-size:13px;opacity:.7">Remover uma partida corrige pontos, gols e artilharia. Jogos registrados antes deste registro existir não aparecem aqui.</p>'}
 function playersTable(T,ro,hideN){const tn=p=>{const n=T.teams.filter(t=>p.tks.includes(t.k)).map(t=>t.n);return n.length?n.join(', '):'—'};
  const sel=p=>`<button class="sm tkb" onclick="pickT(${p.i})">${esc(tn(p)==='—'?'Escolher times':tn(p))}</button>`;
- return `<div class="scroll"><table><tr><th>#</th><th style="text-align:left">Jogador</th><th>Time</th><th>Gols</th><th>G.C.</th><th>Jogos</th><th>Hat-trick</th>${ro?'':'<th></th>'}</tr>`+
+ return `<div class="scroll"><table><tr><th>#</th><th style="text-align:left">Jogador</th><th>Time</th><th>Gols</th><th>G.C.</th><th>Jogos</th><th>Vit.</th><th>Der.</th><th>Hat-trick</th>${ro?'':'<th></th>'}</tr>`+
  sortedP(T).map((p,k)=>`<tr><td class="pos">${k+1}</td><td class="n">${ro?`<span>${hideN?'—':esc(p.n)}</span>`:`<input value="${esc(p.n)}" onfocus="this.select()" onchange="ed('players',${p.i},'n',this.value)">`}</td><td>${ro?`<span>${hideN?'—':esc(tn(p))}</span>`:sel(p)}</td>`+
- ['g','gc','j','h'].map(f=>`<td>${ro?(p[f]||0):`<input type="number" min="0" inputmode="numeric" value="${p[f]||0}" onchange="ed('players',${p.i},'${f}',+this.value)">`}</td>`).join('')+
+ ['g','gc','j','w','l','h'].map(f=>`<td>${ro?(p[f]||0):`<input type="number" min="0" inputmode="numeric" value="${p[f]||0}" onchange="ed('players',${p.i},'${f}',+this.value)">`}</td>`).join('')+
  (ro?'':`<td><div class="row" style="flex-wrap:nowrap;margin:0"><button class="sm trash" title="Excluir jogador" onclick="rm('players',${p.i})">🗑</button><div class="mv"><button onclick="mv('players',${p.i},-1)">▲</button><button onclick="mv('players',${p.i},1)">▼</button></div></div></td>`)+'</tr>').join('')+'</table></div>'}
 function ed(k,i,f,v){cur[k][i][f]=v;save();if(f!=='n')render()}
 function mv(k,i,d){const a=cur[k];let j=i+d;if(j<0||j>=a.length)return;
  if(cur.auto){cur.auto=false;const o=(k==='teams'?sorted(cur):sortedP(cur)).map(x=>x.i);cur[k]=o.map(n=>a[n]);i=o.indexOf(i);j=i+d;if(j<0||j>=a.length){save();return render()}}
  [a[i],a[j]]=[a[j],a[i]];save();render()}
-function add(k){cur[k].push(k==='teams'?{k:rid(),n:'Coloque o nome do time aqui',v:0,e:0,d:0,gp:0,gc:0,h:[]}:{id:rid(),tks:[],n:'Coloque o nome do jogador aqui',j:0,g:0,h:0});save();render()}
+function add(k){cur[k].push(k==='teams'?{k:rid(),n:'Coloque o nome do time aqui',v:0,e:0,d:0,gp:0,gc:0,h:[]}:{id:rid(),tks:[],n:'Coloque o nome do jogador aqui',j:0,g:0,h:0,w:0,l:0});save();render()}
 function sw(){return cur.auto=!cur.auto,save(),render()}
 let PQ=Promise.resolve(),TICK=null;
 function setEt(o,v){Object.defineProperty(o,'_et',{value:v,writable:true,enumerable:false,configurable:true})}
@@ -226,17 +243,23 @@ function open_(id){cur=S.tables.find(t=>t.id===id);go(cur.role==='leitor'?'live'
 function del(id){ask('<h3>Apagar esta tabela?</h3>',[['Apagar',()=>{S.tables=S.tables.filter(t=>t.id!==id);if(cur&&cur.id===id)cur=null;save();go('settings')}],['Cancelar',()=>{}]])}
 async function perm(){if(!('Notification'in window))return toast('Notificações não suportadas aqui');const r=await Notification.requestPermission();toast(r==='granted'?'Notificações ativadas':'Notificações bloqueadas')}
 const PHP={Claro:{bg:'#ffffff',tx:'#111111',ac:'#111111',ln:'#cccccc'},Escuro:{bg:'#0e1a14',tx:'#f3f1e7',ac:'#ffd23f',ln:'#3a4a40'},Verde:{bg:'#0e3b2c',tx:'#f3f1e7',ac:'#ffd23f',ln:'#2d6a52'}};
-function pc(){return Object.assign({bg:'#ffffff',tx:'#111111',ac:'#111111',ln:'#cccccc',sz:100,es:1,u5:1},S.cfg.ph)}
-function phStyle(){const C=pc();return `background:${C.bg};color:${C.tx};--ptx:${C.tx};--pac:${C.ac};--pln:${C.ln};--psz:${C.sz/100}`}
+function pc(){return Object.assign({bg:'#ffffff',tx:'#111111',ac:'#111111',ln:'#cccccc',sz:100,es:1,u5:1,pad:18,sh:0,ti:1},S.cfg.ph)}
+function phStyle(){const C=pc();return `background:${C.bg};color:${C.tx};--ptx:${C.tx};--pac:${C.ac};--pln:${C.ln};--psz:${C.sz/100};padding:${C.pad}px;border-radius:${C.pad>4?6:0}px`}
 function pcf(k,v,r){S.cfg.ph=S.cfg.ph||{};S.cfg.ph[k]=v;persist();if(r)render();else{const e=$('.photo');if(e)e.style.cssText=phStyle()}}
 function phPre(n){S.cfg.ph=Object.assign(S.cfg.ph||{},PHP[n]);persist();render()}
 let phOpen=false;
 function phPanel(){const C=pc(),col=(k,l)=>`<label class="pr"><span>${l}</span><input type="color" value="${C[k]}" oninput="pcf('${k}',this.value)"></label>`;
- return `<div class="card"><div class="row">${Object.keys(PHP).map(n=>`<button class="sm" onclick="phPre('${n}')">${n}</button>`).join('')}</div>${col('bg','Fundo')}${col('tx','Texto')}${col('ac','Títulos')}${col('ln','Linhas')}<div class="pr"><span>Tamanho: <b>${C.sz}%</b></span><span class="row" style="margin:0"><button class="sm" onclick="pcf('sz',Math.max(60,pc().sz-10),1)">A−</button><button class="sm" onclick="pcf('sz',Math.min(160,pc().sz+10),1)">A+</button></span></div><label class="pr"><span>Mostrar escudos</span><input type="checkbox" ${C.es?'checked':''} onchange="pcf('es',this.checked?1:0,1)"></label><label class="pr"><span>Mostrar últimos 5</span><input type="checkbox" ${C.u5?'checked':''} onchange="pcf('u5',this.checked?1:0,1)"></label><div class="row"><button class="sm" onclick="S.cfg.ph={};persist();render()">Restaurar</button></div></div>`}
+ return `<div class="card"><div class="row">${Object.keys(PHP).map(n=>`<button class="sm" onclick="phPre('${n}')">${n}</button>`).join('')}</div>${col('bg','Fundo')}${col('tx','Texto')}${col('ac','Títulos')}${col('ln','Linhas')}<label class="pr"><span>Margem</span><input type="range" min="0" max="40" value="${C.pad}" oninput="pcf('pad',+this.value)"></label><label class="pr"><span>Mostrar</span><select onchange="pcf('sh',+this.value,1)"><option value="0"${C.sh==0?' selected':''}>Ambas</option><option value="1"${C.sh==1?' selected':''}>Só classificação</option><option value="2"${C.sh==2?' selected':''}>Só artilharia</option></select></label><label class="pr"><span>Mostrar título</span><input type="checkbox" ${C.ti?'checked':''} onchange="pcf('ti',this.checked?1:0,1)"></label><div class="pr"><span>Tamanho: <b>${C.sz}%</b></span><span class="row" style="margin:0"><button class="sm" onclick="pcf('sz',Math.max(60,pc().sz-10),1)">A−</button><button class="sm" onclick="pcf('sz',Math.min(160,pc().sz+10),1)">A+</button></span></div><label class="pr"><span>Mostrar escudos</span><input type="checkbox" ${C.es?'checked':''} onchange="pcf('es',this.checked?1:0,1)"></label><label class="pr"><span>Mostrar últimos 5</span><input type="checkbox" ${C.u5?'checked':''} onchange="pcf('u5',this.checked?1:0,1)"></label><div class="row"><button class="sm" onclick="S.cfg.ph={};persist();render()">Restaurar</button></div></div>`}
 function photoView(T,hn){const nm=x=>hn?'—':esc(x),sg=t=>t.gp-t.gc;
  const tt=`<div><h3 style="color:var(--pac,#111)">Classificação</h3><table class="pt"><tr><th>#</th><th class="n">Time</th><th>Pts</th><th>PJ</th><th>V</th><th>E</th><th>D</th><th>GM</th><th>GC</th><th>SG</th>${pc().u5?'<th>Últ. 5</th>':''}</tr>`+sorted(T).map((t,k)=>`<tr><td><b>${k+1}</b></td><td class="n"><img src="${t.img||bdg(t.n,t.i)}" alt="">${nm(t.n)}</td><td><b>${pts(t)}</b></td><td>${t.v+t.e+t.d}</td><td>${t.v}</td><td>${t.e}</td><td>${t.d}</td><td>${t.gp}</td><td>${t.gc}</td><td>${sg(t)>0?'+':''}${sg(t)}</td>${pc().u5?`<td style="white-space:nowrap">${(t.h||[]).slice(-5).map(x=>`<span class="pd ${x}"></span>`).join('')}</td>`:''}</tr>`).join('')+`</table></div>`;
- const pp=`<div><h3 style="color:var(--pac,#111)">Artilharia</h3><table class="pt"><tr><th>#</th><th class="n">Jogador</th><th>Gols</th><th>G.C.</th><th>Jogos</th><th>Hat-trick</th></tr>`+sortedP(T).map((p,k)=>`<tr><td><b>${k+1}</b></td><td class="n">${nm(p.n)}</td><td><b>${p.g}</b></td><td>${p.gc||0}</td><td>${p.j}</td><td>${p.h}</td></tr>`).join('')+`</table></div>`;
- return `<div class="pgrid">${tt}${pp}</div>`}
+ const pp=`<div><h3 style="color:var(--pac,#111)">Artilharia</h3><table class="pt"><tr><th>#</th><th class="n">Jogador</th><th>Gols</th><th>G.C.</th><th>Jogos</th><th>V</th><th>D</th><th>Hat-trick</th></tr>`+sortedP(T).map((p,k)=>`<tr><td><b>${k+1}</b></td><td class="n">${nm(p.n)}</td><td><b>${p.g}</b></td><td>${p.gc||0}</td><td>${p.j}</td><td>${p.w||0}</td><td>${p.l||0}</td><td>${p.h}</td></tr>`).join('')+`</table></div>`;
+ const q=pc().sh|0;return `<div class="pgrid"${q?' style="grid-template-columns:1fr!important"':''}>${q!==2?tt:''}${q!==1?pp:''}</div>`}
+function loadH2C(){return window.html2canvas?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+async function baixarFoto(){const e=$('.photo');if(!e)return;try{toast('Gerando imagem…');await loadH2C();const c=await html2canvas(e,{scale:3,backgroundColor:null,useCORS:true});
+ c.toBlob(async b=>{const f=new File([b],'tabela.png',{type:'image/png'});
+  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(x){}return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='tabela-'+new Date().toISOString().slice(0,10)+'.png';a.click();toast('Imagem salva')},'image/png')}
+ catch(x){toast('Não deu para gerar a imagem. Use Imprimir ou um print.')}}
 function render(){const A=$('#app');applyCfg();
  if(view==='home')A.innerHTML=`<div class="home"><div class="pitch">${cfg().logo?`<img class="lg" src="${cfg().logo}" alt="">`:''}<h1>${esc(cfg().name)}</h1></div>
  ${mine()}<button class="big pri" onclick="newTable()">Criar tabela<small>Times e artilharia, em pontos corridos</small></button>
@@ -252,8 +275,8 @@ function render(){const A=$('#app');applyCfg();
  <h3>Avisos</h3><div class="row"><button class="sm" onclick="perm()">Ativar notificações</button></div>`;
  else if(view==='crests')A.innerHTML=head('Escudos · '+esc(cur.name),'settings')+cur.teams.map((t,i)=>`<div class="card cr"><img src="${t.img||bdg(t.n,i)}" onclick="crestMenu(${i})" alt=""><div style="flex:1;min-width:0"><b>${esc(t.n)}</b><div class="row"><button class="sm pri" onclick="crest(${i})">Escolher da galeria</button>${t.img?`<button class="sm" onclick="crestDel(${i})">Remover</button>`:''}</div></div></div>`).join('');
  else if(view==='photo'){const T=cur,o=T.role==='leitor';A.innerHTML=`<div class="noprint ${bar?'':'hide'}" id="bar"><button class="sm" onclick="go('${o?'live':'edit'}')">‹ Voltar</button>
- <div class="row"><button class="sm ${phOpen?'pri':''}" onclick="phOpen=!phOpen;render()">Cores</button><button class="sm" onclick="photoNames=!photoNames;render()">Nomes: ${photoNames?'visíveis':'ocultos'}</button><button class="sm pri" onclick="bar=false;render();toast('Toque na tela para voltar os botões')">Esconder botões</button><button class="sm" onclick="print()">Imprimir</button></div>${phOpen?phPanel():''}</div>
- <div class="photo ${pc().es?'':'noes'}" style="${phStyle()}" onclick="if(!bar){bar=true;render()}"><h2>${esc(T.name)}</h2>${photoView(T,!photoNames)}</div>`}}
+ <div class="row"><button class="sm ${phOpen?'pri':''}" onclick="phOpen=!phOpen;render()">Cores</button><button class="sm" onclick="photoNames=!photoNames;render()">Nomes: ${photoNames?'visíveis':'ocultos'}</button><button class="sm pri" onclick="bar=false;render();toast('Toque na tela para voltar os botões')">Esconder botões</button><button class="sm pri" onclick="baixarFoto()">Salvar imagem</button><button class="sm" onclick="print()">Imprimir</button></div>${phOpen?phPanel():''}</div>
+ <div class="photo ${pc().es?'':'noes'}" style="${phStyle()}" onclick="if(!bar){bar=true;render()}">${pc().ti?`<h2>${esc(T.name)}</h2>`:''}${photoView(T,!photoNames)}</div>`}}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();const l=(localStorage.getItem('craques_last')||'').split('|'),t=S.tables.find(x=>x.id===l[0]);if(t){cur=t;view=l[1]}}catch(e){}
 render();
 try{const q=location.search||location.hash.replace('#','?');if(/[?&]c=/.test(q)){setTimeout(()=>join(q),0);try{history.replaceState(null,'',location.pathname)}catch(e){}}}catch(e){}
