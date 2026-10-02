@@ -178,7 +178,16 @@ function mv(k,i,d){const a=cur[k];let j=i+d;if(j<0||j>=a.length)return;
  [a[i],a[j]]=[a[j],a[i]];save();render()}
 function add(k){cur[k].push(k==='teams'?{k:rid(),n:'Coloque o nome do time aqui',v:0,e:0,d:0,gp:0,gc:0,h:[]}:{id:rid(),tks:[],n:'Coloque o nome do jogador aqui',j:0,g:0,h:0});save();render()}
 function sw(){return cur.auto=!cur.auto,save(),render()}
-async function push(T){try{await fetch(`${DB_URL}/tabelas/${T.id}.json`,{method:'PUT',body:JSON.stringify({...T,owner:false,live:undefined,role:undefined})})}catch(e){}}
+let PQ=Promise.resolve(),TICK=null;
+function setEt(o,v){Object.defineProperty(o,'_et',{value:v,writable:true,enumerable:false,configurable:true})}
+async function rget(id){const r=await fetch(`${DB_URL}/tabelas/${id}.json`,{headers:{'X-Firebase-ETag':'true'}});const d=await r.json();if(d&&typeof d==='object')setEt(d,r.headers.get('ETag'));return d}
+function push(T){return PQ=PQ.then(()=>dpush(T))}
+function clash(T,R){fix(R);R.owner=T.owner;R.live=T.live;R.role=T.role;R.sy=R.t;const i=S.tables.findIndex(x=>x.id===T.id);if(i>=0)S.tables[i]=R;persist();if(cur&&cur.id===T.id){cur=R;toast('Outra pessoa alterou a tabela ao mesmo tempo. Sua última alteração não foi salva: refaça.');render()}}
+async function dpush(T){try{let et=T._et;
+ if(!et){const R=await rget(T.id);if(R&&R.teams&&T.sy!==undefined&&R.t!==T.sy)return clash(T,R);et=R&&R._et}
+ const res=await fetch(`${DB_URL}/tabelas/${T.id}.json`,{method:'PUT',headers:et?{'if-match':et}:{},body:JSON.stringify({...T,owner:false,live:undefined,role:undefined,sy:undefined})});
+ if(res.status===412){const R=await rget(T.id);if(R&&R.teams)clash(T,R);return}
+ if(res.ok){setEt(T,res.headers.get('ETag'));T.sy=T.t;persist()}}catch(e){}}
 let SR='leitor';
 const BASE=()=>APP_URL||(/^https?:/.test(location.protocol)?location.origin+location.pathname:'');
 const lnk=r=>`${BASE()||'craques://entrar'}?c=${cur.id}&r=${r}`;
@@ -198,11 +207,17 @@ async function join(txt){const raw=(txt!==undefined?txt:$('#cod').value).trim();
  const i=S.tables.findIndex(x=>x.id===T.id),old=S.tables[i];
  if(old&&old.owner){cur=old;return go('edit')}
  if(old&&RK[old.role]>RK[r])r=old.role;
- T.owner=false;T.live=true;fix(T);T.role=r;i>=0?S.tables[i]=T:S.tables.push(T);cur=T;persist();go(r==='leitor'?'live':'edit')}
-function startPoll(){if(!DB_URL||!cur)return;clearInterval(poll);const id=cur.id;poll=setInterval(async()=>{try{const T=await(await fetch(`${DB_URL}/tabelas/${id}.json`)).json();
- if(!cur||cur.id!==id||!T||!T.teams||!(T.t>(cur.t||0)))return;
- if(/INPUT|SELECT/.test((document.activeElement||{}).tagName||''))return;
- const o=cur,i=S.tables.findIndex(x=>x.id===id);fix(T);T.owner=o.owner;T.live=o.live;T.role=o.role;if(i>=0)S.tables[i]=T;cur=T;persist();notify('Tabela atualizada',T.name);render()}catch(e){}},5000)}
+ T.owner=false;T.live=true;fix(T);T.sy=T.t;T.role=r;i>=0?S.tables[i]=T:S.tables.push(T);cur=T;persist();go(r==='leitor'?'live':'edit')}
+function startPoll(){if(!DB_URL||!cur)return;clearInterval(poll);const id=cur.id;
+ TICK=async()=>{try{if(view!=='edit'&&view!=='live')return;const T=await rget(id);
+  if(!cur||cur.id!==id||!T||!T.teams)return;
+  if(cur.sy===undefined&&!(T.t>(cur.t||0))){cur.sy=T.t;return}
+  if(T.t===cur.t){cur.sy=T.t;return}
+  if(T.t===cur.sy)return;
+  if(/INPUT|SELECT/.test((document.activeElement||{}).tagName||''))return;
+  const o=cur,i=S.tables.findIndex(x=>x.id===id);fix(T);T.owner=o.owner;T.live=o.live;T.role=o.role;T.sy=T.t;if(i>=0)S.tables[i]=T;cur=T;persist();notify('Tabela atualizada',T.name);render()}catch(e){}};
+ TICK();poll=setInterval(TICK,5000)}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&TICK)TICK()});
 function backup(){const b=new Blob([JSON.stringify(S)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='backup-craques-'+new Date().toISOString().slice(0,10)+'.json';a.click();notify('Backup salvo','arquivo baixado')}
 $('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.tables)throw 0;S=d;S.tables.forEach(fix);save();notify('Backup restaurado',S.tables.length+' tabela(s)');go('settings')}catch(x){toast('Arquivo de backup inválido')}};r.readAsText(f);e.target.value=''};
 function restoreAuto(){const b=JSON.parse(localStorage.getItem('craques_bk')||'null');if(!b)return toast('Nenhum backup automático');
