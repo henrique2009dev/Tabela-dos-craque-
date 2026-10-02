@@ -84,7 +84,7 @@ let S={tables:[]},tab='t',cur=null,view='home',poll=null,photoNames=true,bar=tru
 try{S=JSON.parse(localStorage.getItem('craques')||'{"tables":[]}')}catch(e){}
 const $=s=>document.querySelector(s),esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
 const rid=()=>Math.random().toString(36).slice(2,8).toUpperCase();
-function fix(T){S.cfg=S.cfg||{};T.role=T.role||(T.live?'leitor':'admin');T.teams=T.teams||[];T.players=T.players||[];T.teams.forEach(t=>{t.k=t.k||rid();t.h=t.h||[]});T.players.forEach(p=>{p.id=p.id||rid();if(!Array.isArray(p.tks))p.tks=p.tk?[p.tk]:[];delete p.tk;p.gc=p.gc||0})}
+function fix(T){S.cfg=S.cfg||{};if(!Array.isArray(T.hist)){T.hist=[];if(T.u){T.u.id=T.u.id||rid();T.u.t=T.u.t||0;T.hist.push(T.u)}}T.role=T.role||(T.live?'leitor':'admin');T.teams=T.teams||[];T.players=T.players||[];T.teams.forEach(t=>{t.k=t.k||rid();t.h=t.h||[]});T.players.forEach(p=>{p.id=p.id||rid();if(!Array.isArray(p.tks))p.tks=p.tk?[p.tk]:[];delete p.tk;p.gc=p.gc||0})}
 S.tables=S.tables||[];S.cfg=S.cfg||{};S.tables.forEach(fix);
 function persist(){const j=JSON.stringify(S);localStorage.setItem('craques',j);localStorage.setItem('craques_bk',JSON.stringify({d:Date.now(),j}))}
 function save(){const w=cur&&cur.role!=='leitor'&&DB_URL;if(w)cur.t=Date.now();persist();if(w)push(cur)}
@@ -154,10 +154,18 @@ function reg(){const a=$('#sa').value,b=$('#sb').value,ga=+$('#ga').value||0,gb=
  A.gp+=ga;A.gc+=gb;B.gp+=gb;B.gc+=ga;A[r[0]]++;B[r[1]]++;(A.h=A.h||[]).push(r[2]);(B.h=B.h||[]).push(r[3]);
  const u={a,b,ga,gb,r:[r[0],r[1]],s:`${A.n} ${ga} x ${gb} ${B.n}`,p:[]};
  ps.forEach(([p,g,o])=>{const h=g>=3?1:0;p.g+=g;p.gc=(p.gc||0)+o;p.j++;p.h+=h;u.p.push([p.id,g,h,o])});
- cur.u=u;D.ga=D.gb=0;D.g={};D.x={};D.o={};save();notify('Jogo registrado',u.s);render()}
-function undo(){const u=cur.u;if(!u)return;ask(`<h3>Desfazer o último jogo?</h3><p>${esc(u.s)}</p>`,[['Desfazer',()=>{const A=cur.teams.find(t=>t.k===u.a),B=cur.teams.find(t=>t.k===u.b);if(!A||!B)return toast('Não foi possível desfazer');
- A.gp-=u.ga;A.gc-=u.gb;B.gp-=u.gb;B.gc-=u.ga;A[u.r[0]]--;B[u.r[1]]--;(A.h||[]).pop();(B.h||[]).pop();
- (u.p||[]).forEach(([id,g,h,o])=>{const p=cur.players.find(q=>q.id===id);if(p){p.g-=g;p.gc=(p.gc||0)-(o||0);p.j--;p.h-=h}});delete cur.u;save();toast('Último jogo desfeito');render()}],['Cancelar',()=>{}]])}
+ u.id=rid();u.t=Date.now();(cur.hist=cur.hist||[]).push(u);cur.u=u;D.ga=D.gb=0;D.g={};D.x={};D.o={};save();notify('Jogo registrado',u.s);render()}
+function undo(){const u=cur.u;if(u)delGame(u.id)}
+function delGame(id){const H=cur.hist||[],ix=H.findIndex(x=>x.id===id);if(ix<0)return;const u=H[ix];
+ ask(`<h3>Remover partida?</h3><p>${esc(u.s)}</p><p style="font-size:13px;opacity:.8">Pontos, gols e artilharia serão corrigidos.</p>`,[['Remover',()=>{
+  const A=cur.teams.find(t=>t.k===u.a),B=cur.teams.find(t=>t.k===u.b),later=k=>H.slice(ix+1).filter(x=>x.a===k||x.b===k).length;
+  const fx=(t,gp,gc,r,k)=>{if(!t)return;t.gp-=gp;t.gc-=gc;t[r]--;const h=t.h||[],p=h.length-1-later(k);if(p>=0&&h[p]===r.toUpperCase())h.splice(p,1)};
+  fx(A,u.ga,u.gb,u.r[0],u.a);fx(B,u.gb,u.ga,u.r[1],u.b);
+  (u.p||[]).forEach(([pid,g,hh,o])=>{const p=cur.players.find(q=>q.id===pid);if(p){p.g-=g;p.gc=(p.gc||0)-(o||0);p.j--;p.h-=hh}});
+  H.splice(ix,1);if(H.length)cur.u=H[H.length-1];else delete cur.u;save();toast('Partida removida');render()}],['Cancelar',()=>{}]])}
+function histView(T,ro){const H=(T.hist||[]).slice().reverse();
+ return '<h3>Registro de partidas</h3>'+(H.length?H.map(u=>{const A=T.teams.find(t=>t.k===u.a),B=T.teams.find(t=>t.k===u.b),d=u.t?new Date(u.t).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'';
+  return `<div class="card pr"><div style="flex:1;min-width:0"><b>${esc(A?A.n:'?')} ${u.ga} x ${u.gb} ${esc(B?B.n:'?')}</b><div style="font-size:12px;opacity:.7">${d}</div></div>${ro?'':`<button class="sm trash" title="Remover partida" onclick="delGame('${u.id}')">🗑</button>`}</div>`}).join(''):'<p style="opacity:.7">Nenhuma partida registrada ainda.</p>')+'<p style="font-size:13px;opacity:.7">Remover uma partida corrige pontos, gols e artilharia. Jogos registrados antes deste registro existir não aparecem aqui.</p>'}
 function playersTable(T,ro,hideN){const tn=p=>{const n=T.teams.filter(t=>p.tks.includes(t.k)).map(t=>t.n);return n.length?n.join(', '):'—'};
  const sel=p=>`<button class="sm tkb" onclick="pickT(${p.i})">${esc(tn(p)==='—'?'Escolher times':tn(p))}</button>`;
  return `<div class="scroll"><table><tr><th>#</th><th style="text-align:left">Jogador</th><th>Time</th><th>Gols</th><th>G.C.</th><th>Jogos</th><th>Hat-trick</th>${ro?'':'<th></th>'}</tr>`+
@@ -219,8 +227,8 @@ function render(){const A=$('#app');applyCfg();
  ${mine()}<button class="big pri" onclick="newTable()">Criar tabela<small>Times e artilharia, em pontos corridos</small></button>
  <button class="big" onclick="go('join')">Entrar em uma planilha<small>Use o código que você recebeu</small></button>
  <button class="big" onclick="go('settings')">Configuração<small>Suas tabelas, backup, modo foto</small></button></div>`;
- else if(view==='edit'||view==='live'){const T=cur,ro=view==='live';A.innerHTML=head(esc(T.name))+`<div class="row"><button class="sm ${tab==='t'?'pri':''}" onclick="tab='t';render()">Times</button><button class="sm ${tab==='p'?'pri':''}" onclick="tab='p';render()">Jogadores</button></div><div class="row">${ro?'<span style="opacity:.8">Leitor · '+(DB_URL?'Ao vivo — atualiza sozinho':'Cópia da tabela recebida')+'</span>':((T.owner||T.role==='admin')?'<button class="pri" onclick="share()">🔗 Compartilhar</button>':'<span style="opacity:.8">Editor · ao vivo</span>')+'<button class="sm" onclick="sw()">Ordem: '+(T.auto?'automática':'manual')+'</button>'}<button class="sm" onclick="go('photo')">Modo foto</button></div>`+
- (tab==='t'?(ro?'':panel(T))+teamsTable(T,ro)+(ro?'':'<div class="row"><button class="sm" onclick="add(\'teams\')">+ Time</button></div>'):'<h3>Artilharia dos jogadores</h3>'+playersTable(T,ro)+(ro?'':'<div class="row"><button class="sm" onclick="add(\'players\')">+ Jogador</button></div>'))+
+ else if(view==='edit'||view==='live'){const T=cur,ro=view==='live';A.innerHTML=head(esc(T.name))+`<div class="row"><button class="sm ${tab==='t'?'pri':''}" onclick="tab='t';render()">Times</button><button class="sm ${tab==='p'?'pri':''}" onclick="tab='p';render()">Jogadores</button><button class="sm ${tab==='h'?'pri':''}" onclick="tab='h';render()">Registros</button></div><div class="row">${ro?'<span style="opacity:.8">Leitor · '+(DB_URL?'Ao vivo — atualiza sozinho':'Cópia da tabela recebida')+'</span>':((T.owner||T.role==='admin')?'<button class="pri" onclick="share()">🔗 Compartilhar</button>':'<span style="opacity:.8">Editor · ao vivo</span>')+'<button class="sm" onclick="sw()">Ordem: '+(T.auto?'automática':'manual')+'</button>'}<button class="sm" onclick="go('photo')">Modo foto</button></div>`+
+ (tab==='t'?(ro?'':panel(T))+teamsTable(T,ro)+(ro?'':'<div class="row"><button class="sm" onclick="add(\'teams\')">+ Time</button></div>'):tab==='h'?histView(T,ro):'<h3>Artilharia dos jogadores</h3>'+playersTable(T,ro)+(ro?'':'<div class="row"><button class="sm" onclick="add(\'players\')">+ Jogador</button></div>'))+
  (ro?'':'<p style="opacity:.7;font-size:14px">Pts: vitória 3, empate 1. Toque nas bolinhas para mudar os últimos resultados. Use ▲▼ para mover. Para somar os gols dos jogadores no jogo, escolha o time de cada jogador na aba Jogadores.</p>');
  startPoll()}
  else if(view==='join')A.innerHTML=head('Entrar em uma planilha')+`<div class="card"><p>Cole o link (ou digite o código) que te enviaram.</p><div class="row"><input id="cod" placeholder="Link ou código" style="flex:1"><button class="sm" onclick="navigator.clipboard.readText().then(t=>{$('#cod').value=t;join()}).catch(()=>toast('Cole no campo manualmente'))">Colar</button><button class="pri" onclick="join()">Entrar</button></div></div>`;
