@@ -202,10 +202,6 @@ function restoreAuto(){const b=JSON.parse(localStorage.getItem('craques_bk')||'n
 function open_(id){cur=S.tables.find(t=>t.id===id);go(cur.role==='leitor'?'live':'edit')}
 function del(id){ask('<h3>Apagar esta tabela?</h3>',[['Apagar',()=>{S.tables=S.tables.filter(t=>t.id!==id);if(cur&&cur.id===id)cur=null;save();go('settings')}],['Cancelar',()=>{}]])}
 async function perm(){if(!('Notification'in window))return toast('Notificações não suportadas aqui');const r=await Notification.requestPermission();toast(r==='granted'?'Notificações ativadas':'Notificações bloqueadas')}
-async function checkUpdate(manual){if(!UPDATE_URL)return manual&&toast('Endereço de atualização não configurado');
- try{const d=await(await fetch(UPDATE_URL+'?'+Date.now())).json();
- if(d.version&&d.version!==VERSION){notify('Atualização disponível','versão '+d.version);ask(`<h3>Nova versão ${esc(d.version)}</h3><p>${esc(d.notas||'')}</p>`,[['Atualizar agora',()=>location.href=d.url],['Agora não',()=>{}]])}
- else manual&&toast('Você já usa a versão mais recente')}catch(e){manual&&toast('Não foi possível verificar')}}
 const PHP={Claro:{bg:'#ffffff',tx:'#111111',ac:'#111111',ln:'#cccccc'},Escuro:{bg:'#0e1a14',tx:'#f3f1e7',ac:'#ffd23f',ln:'#3a4a40'},Verde:{bg:'#0e3b2c',tx:'#f3f1e7',ac:'#ffd23f',ln:'#2d6a52'}};
 function pc(){return Object.assign({bg:'#ffffff',tx:'#111111',ac:'#111111',ln:'#cccccc',sz:100,es:1,u5:1},S.cfg.ph)}
 function phStyle(){const C=pc();return `background:${C.bg};color:${C.tx};--ptx:${C.tx};--pac:${C.ac};--pln:${C.ln};--psz:${C.sz/100}`}
@@ -230,12 +226,12 @@ function render(){const A=$('#app');applyCfg();
  else if(view==='join')A.innerHTML=head('Entrar em uma planilha')+`<div class="card"><p>Cole o link (ou digite o código) que te enviaram.</p><div class="row"><input id="cod" placeholder="Link ou código" style="flex:1"><button class="sm" onclick="navigator.clipboard.readText().then(t=>{$('#cod').value=t;join()}).catch(()=>toast('Cole no campo manualmente'))">Colar</button><button class="pri" onclick="join()">Entrar</button></div></div>`;
  else if(view==='settings')A.innerHTML=head('Configuração')+appearance()+`<h3>Suas tabelas</h3>`+(S.tables.length?S.tables.map(t=>`<div class="card"><b>${esc(t.name)}</b> <span style="opacity:.7">${t.live?'recebida · '+RN[t.role]:'sua tabela'}</span><div class="row"><button class="sm" onclick="open_('${t.id}')">Abrir</button>${t.role==='leitor'?'':`<button class="sm" onclick="cur=S.tables.find(x=>x.id==='${t.id}');go('crests')">Escudos</button>`}<button class="sm" onclick="cur=S.tables.find(x=>x.id==='${t.id}');go('photo')">Foto</button><button class="sm" onclick="del('${t.id}')">Apagar</button></div></div>`).join(''):'<p>Nenhuma tabela ainda.</p>')+
  `<h3>Backup</h3><div class="row"><button class="sm" onclick="backup()">Salvar backup</button><button class="sm" onclick="$('#file').click()">Importar backup</button><button class="sm" onclick="restoreAuto()">Último automático</button></div>
- <h3>Avisos e versão</h3><div class="row"><button class="sm" onclick="perm()">Ativar notificações</button><button class="sm" onclick="checkUpdate(1)">Buscar atualização</button></div><p style="opacity:.7">Versão ${VERSION}</p>`;
+ <h3>Avisos</h3><div class="row"><button class="sm" onclick="perm()">Ativar notificações</button></div>`;
  else if(view==='crests')A.innerHTML=head('Escudos · '+esc(cur.name),'settings')+cur.teams.map((t,i)=>`<div class="card cr"><img src="${t.img||bdg(t.n,i)}" onclick="crestMenu(${i})" alt=""><div style="flex:1;min-width:0"><b>${esc(t.n)}</b><div class="row"><button class="sm pri" onclick="crest(${i})">Escolher da galeria</button>${t.img?`<button class="sm" onclick="crestDel(${i})">Remover</button>`:''}</div></div></div>`).join('');
  else if(view==='photo'){const T=cur,o=T.role==='leitor';A.innerHTML=`<div class="noprint ${bar?'':'hide'}" id="bar"><button class="sm" onclick="go('${o?'live':'edit'}')">‹ Voltar</button>
  <div class="row"><button class="sm ${phOpen?'pri':''}" onclick="phOpen=!phOpen;render()">Cores</button><button class="sm" onclick="photoNames=!photoNames;render()">Nomes: ${photoNames?'visíveis':'ocultos'}</button><button class="sm pri" onclick="bar=false;render();toast('Toque na tela para voltar os botões')">Esconder botões</button><button class="sm" onclick="print()">Imprimir</button></div>${phOpen?phPanel():''}</div>
  <div class="photo ${pc().es?'':'noes'}" style="${phStyle()}" onclick="if(!bar){bar=true;render()}"><h2>${esc(T.name)}</h2>${photoView(T,!photoNames)}</div>`}}
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();const l=(localStorage.getItem('craques_last')||'').split('|'),t=S.tables.find(x=>x.id===l[0]);if(t){cur=t;view=l[1]}}catch(e){}
-render();checkUpdate();
+render();
 try{const q=location.search||location.hash.replace('#','?');if(/[?&]c=/.test(q)){setTimeout(()=>join(q),0);try{history.replaceState(null,'',location.pathname)}catch(e){}}}catch(e){}
 </script></body></html>
