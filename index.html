@@ -255,11 +255,34 @@ function photoView(T,hn){const nm=x=>hn?'—':esc(x),sg=t=>t.gp-t.gc;
  const pp=`<div><h3 style="color:var(--pac,#111)">Artilharia</h3><table class="pt"><tr><th>#</th><th class="n">Jogador</th><th>Gols</th><th>G.C.</th><th>Jogos</th><th>V</th><th>D</th><th>Hat-trick</th></tr>`+sortedP(T).map((p,k)=>`<tr><td><b>${k+1}</b></td><td class="n">${nm(p.n)}</td><td><b>${p.g}</b></td><td>${p.gc||0}</td><td>${p.j}</td><td>${p.w||0}</td><td>${p.l||0}</td><td>${p.h}</td></tr>`).join('')+`</table></div>`;
  const q=pc().sh|0;return `<div class="pgrid"${q?' style="grid-template-columns:1fr!important"':''}>${q!==2?tt:''}${q!==1?pp:''}</div>`}
 function loadH2C(){return window.html2canvas?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
-async function baixarFoto(){const e=$('.photo');if(!e)return;try{toast('Gerando imagem…');await loadH2C();const c=await html2canvas(e,{scale:3,backgroundColor:null,useCORS:true});
- c.toBlob(async b=>{const f=new File([b],'tabela.png',{type:'image/png'});
-  if(navigator.canShare&&navigator.canShare({files:[f]})){try{await navigator.share({files:[f]})}catch(x){}return}
-  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='tabela-'+new Date().toISOString().slice(0,10)+'.png';a.click();toast('Imagem salva')},'image/png')}
- catch(x){toast('Não deu para gerar a imagem. Use Imprimir ou um print.')}}
+function baixarFoto(){
+ ask('<h3>Salvar imagem</h3><p>Deseja baixar a imagem da tabela?</p>',[
+  ['Baixar',()=>fotoAcao('baixar')],
+  ['Só compartilhar',()=>fotoAcao('compartilhar')],
+  ['Cancelar',()=>{}]
+ ])}
+async function fotoAcao(modo){
+ const e=$('.photo');if(!e)return;
+ try{
+  toast('Gerando imagem…');
+  await loadH2C();
+  const c=await html2canvas(e,{scale:3,backgroundColor:null,useCORS:true});
+  const b=await new Promise(ok=>c.toBlob(ok,'image/png'));
+  if(modo==='baixar'){
+   const a=document.createElement('a');
+   a.href=URL.createObjectURL(b);
+   a.download='tabela-'+new Date().toISOString().slice(0,10)+'.png';
+   a.click();
+   toast('Imagem baixada');
+  }else{
+   const f=new File([b],'tabela.png',{type:'image/png'});
+   if(navigator.canShare&&navigator.canShare({files:[f]}))await navigator.share({files:[f]});
+   else toast('Este aparelho não permite compartilhar imagem. Use "Baixar".');
+  }
+ }catch(x){
+  if(x&&x.name==='AbortError')return; // você fechou a tela de compartilhar
+  toast('Não deu para gerar a imagem. Use Imprimir ou um print.');
+ }}
 function render(){const A=$('#app');applyCfg();
  if(view==='home')A.innerHTML=`<div class="home"><div class="pitch">${cfg().logo?`<img class="lg" src="${cfg().logo}" alt="">`:''}<h1>${esc(cfg().name)}</h1></div>
  ${mine()}<button class="big pri" onclick="newTable()">Criar tabela<small>Times e artilharia, em pontos corridos</small></button>
